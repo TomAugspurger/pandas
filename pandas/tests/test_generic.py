@@ -485,21 +485,31 @@ class TestDataFrame(unittest.TestCase, Generic):
         result = df.interpolate(index='C')
         expected = DataFrame({'A': [1, 2, 2.6666667, 4], 'B': [1, 4, 9, 9],
                               'C': [1, 2, 3, 5], 'D': list('abcd')})
+        assert_frame_equal(result, expected)
 
     def test_interp_combo(self):
         df = DataFrame({'A': [1., 2., np.nan, 4.], 'B': [1, 4, 9, np.nan],
-                'C': [1., 2., 3., 5.], 'D': list('abcd')})
+                        'C': [1., 2., 3., 5.], 'D': list('abcd')})
+
+        # these should return all the columns (but just interpolate on A)
+        result = df.interpolate(values='A')
+        expected = df.copy()
+        expected['A'] = Series([1,2,3,4])
+        assert_frame_equal(result, expected)
+
+        ## is the expected right here?
         result = df.interpolate(values='A', index='C')
-        expected = expected = DataFrame({'A': [1, 2, 3, 4], 'C': [1, 2, 3, 5]})
+        expected = df.copy()
+        expected['A'] = Series([1,2,3,4])
         assert_frame_equal(result, expected)
 
     def test_interp_leading_nan(self):
         df = DataFrame({'A': [1, 2, np.nan, 4], 'B': [np.nan, 2, 3, 4]})
         result = df.interpolate(values='A', index='B')
-        expected = DataFrame({'A': [1, 2, 3, 4]})
+        expected = DataFrame({'A': [1, 2, 3, 4], 'B' : df['B']})
         assert_frame_equal(result, expected)
 
-    def test_vairous(self):
+    def test_interp_various(self):
         df = DataFrame({'A': [1, 2, np.nan, 4, 5, np.nan, 7],
                         'C': [1, 2, 3, 5, 8, 13, 21]})
         result = df.interpolate(index='C', values='C', method=1)

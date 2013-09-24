@@ -1565,7 +1565,6 @@ class NDFrame(PandasObject):
 
                 return result
 
-            method = com._clean_fill_method(method)
             new_data = self._data.interpolate(method=method,
                                               axis=axis,
                                               limit=limit,
@@ -1843,7 +1842,7 @@ class NDFrame(PandasObject):
 
     def interpolate(self, index=None, values=None, new_values=None,
                     method='linear', fill_value=None, inplace=False,
-                    limit=None, axis=0):
+                    limit=None, axis=None, downcast='infer'):
         """Interpolate values according to different methods.
 
         Parameters
@@ -1875,7 +1874,8 @@ class NDFrame(PandasObject):
             original range (extrapolation).  Fills with the end value by default.
         inplace : bool, default False
         limit : int, default None. Maximum number of consecutive NaNs to fill.
-        axis : int, default 0
+        axis : the axis to run the interpolation, default to info_axis
+        downcast : optional, 'infer' or None, defaults to 'infer'
 
         Returns
         -------
@@ -1918,52 +1918,55 @@ class NDFrame(PandasObject):
         2  3   9
         3  4  13
         """
-        dispatch = {1: com.interpolate_1d, 2: com.interpolate_2d}
 
-        if method == 'linear' and index is None:
-            index = pa.arange(len(self))  # prior default
-        elif index is None:
-            index = self.index
-        else:
-            index = self[index]
+        # get the indexing axis
+        if axis is None:
+            axis = self._info_axis_name
+        axis = self._get_axis_number(axis)
 
-        interp_d = index.ndim
-
-        if values is None:
-            values = self._data.get_numeric_data()
-            nonnumeric = self._data.items - values.items  # has to be a better way?
-        else:
-            # handle dataframe columns or arbitrary arrays?
-            # is there any use for arbitrary arrays?
-            values = self[list(values)]._data  # wont work with axis or arrays
-            nonnumeric = {}
-        # hacky
-        if self.ndim == 1:
-            values = values.values
-        elif self.ndim == 2:
-            values = self[values.items].values
-        else:
-            raise NotImplementedError("Panel not yet supported.")
-
-        if new_values is None:  # filling NaNs, returning similar NDFrame
-            if interp_d > 2:
-                raise NotImplementedError("Only 1-d and 2-d interpolation"
-                                          "is currently supported.")
-            if values.ndim > 1:
-                res = [dispatch[interp_d](index, x, method=method, axis=axis,
-                                          limit=limit, fill_value=fill_value)
-                       for x in values.T]
-                res = np.array(res).T
+        # create/use the index
+        if index is None:
+            if method == 'linear':
+                index = np.arange(len(self))  # prior default
             else:
-                res = dispatch[interp_d](index, values, method=method, axis=axis,
-                                         limit=limit, fill_value=fill_value)
-            # TODO: Losing name on series, columns on dataframe
-            d = self._construct_axes_dict()
-            if nonnumeric:
-                d['columns'] = d['columns'] - nonnumeric  # TODO: keep nonumerics
-            return self._constructor(res, **d)
-        else:  # interpolating at new_values
-            raise NotImplementedError
+                index = self._get_axis(axis)
+        elif np.isscalar(index):
+            slicer = [ slice(None, None) ] * self._AXIS_LEN
+            slicer[axis] = index
+            index = self.loc[tuple(slicer)].values
+
+        # if we have passed values, use those for that column
+        if values is not None:
+
+            # a column
+            if np.isscalar(values):
+                v = self[values]
+                v = v.interpolate(method=method,
+                                  axis=0,
+                                  index=index,
+                                  new_values=new_values,
+                                  limit=limit,
+                                  inplace=inplace,
+                                  downcast=downcast)
+                if not inplace:
+                    self = self.copy()
+                self[values] = v
+                return self
+
+        new_data = self._data.interpolate(method=method,
+                                          axis=axis,
+                                          index=index,
+                                          values=values,
+                                          new_values=new_values,
+                                          limit=limit,
+                                          inplace=inplace,
+                                          downcast=downcast)
+
+        if inplace:
+            self._data = new_data
+        else:
+            return self._constructor(new_data)
+
     #----------------------------------------------------------------------
     # Action Methods
 
