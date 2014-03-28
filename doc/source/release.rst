@@ -149,6 +149,8 @@ API Changes
 - Define and document the order of column vs index names in query/eval (:issue:`6676`)
 
 - ``DataFrame.sort`` now places NaNs at the beginning or end of the sort according to the ``na_position`` parameter. (:issue:`3917`)
+- ``stack`` and ``unstack`` now raise a ``ValueError`` when the ``level`` keyword refers
+  to a non-unique item in the ``Index`` (previously raised a ``KeyError``). (:issue:`6738`)
 
 Deprecations
 ~~~~~~~~~~~~

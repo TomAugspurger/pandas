@@ -196,6 +196,8 @@ API changes
     covs = rolling_cov(df[['A','B','C']], df[['B','C','D']], 5, pairwise=True)
     covs[df.index[-1]]
 
+- ``stack`` and ``unstack`` now raise a ``ValueError`` when the ``level`` keyword refers
+  to a non-unique item in the ``Index`` (previously raised a ``KeyError``).
 
 MultiIndexing Using Slicers
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
