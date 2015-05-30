@@ -1447,7 +1447,7 @@ class DataFrame(NDFrame):
                 float_format=None, sparsify=None, index_names=True,
                 justify=None, bold_rows=True, classes=None, escape=True,
                 max_rows=None, max_cols=None, show_dimensions=False,
-                notebook=False):
+                notebook=False, styles=None):
         """
         Render a DataFrame as an HTML table.
 
@@ -1491,11 +1491,11 @@ class DataFrame(NDFrame):
         if buf is None:
             return formatter.buf.getvalue()
 
-    def style(self, rows=None, columns=None, frame=None):
-        row_styles, col_styles, frame_styles = self._build_styles(
-            rows=rows, columns=columns, frame=frame
+    def style(self, rows=None, columns=None, table=None):
+        styles = self._build_styles(
+            rows=rows, columns=columns, table=table
         )
-        return self.to_html(styles)
+        return self.to_html(styles=styles)
 
     def _format_sytle_args(self, rows=None, columns=None, frame=None):
         rows = {row: [x] if not com.is_list_like(x) else x
