@@ -1446,8 +1446,8 @@ class DataFrame(NDFrame):
                 header=True, index=True, na_rep='NaN', formatters=None,
                 float_format=None, sparsify=None, index_names=True,
                 justify=None, bold_rows=True, classes=None, escape=True,
-                max_rows=None, max_cols=None, show_dimensions=False,
-                notebook=False, styles=None):
+                max_rows=None, max_cols=None, show_dimensions=False, style=None,
+                notebook=False):
         """
         Render a DataFrame as an HTML table.
 
@@ -1486,7 +1486,8 @@ class DataFrame(NDFrame):
                                            max_rows=max_rows,
                                            max_cols=max_cols,
                                            show_dimensions=show_dimensions)
-        formatter.to_html(classes=classes, notebook=notebook)
+        # TODO: a generic formatter wld b in DataFrameFormatter
+        formatter.to_html(classes=classes, style=style, notebook=notebook)
 
         if buf is None:
             return formatter.buf.getvalue()
@@ -1498,6 +1499,7 @@ class DataFrame(NDFrame):
         return self.to_html(styles=styles)
 
     def _format_sytle_args(self, rows=None, columns=None, frame=None):
+        # TODO: hanlde rows=func.
         rows = {row: [x] if not com.is_list_like(x) else x
                 for row, x in rows.items()}
         columns = {col: [x] if not com.is_list_like(x) else x

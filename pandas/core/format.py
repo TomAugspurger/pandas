@@ -723,7 +723,7 @@ class DataFrameFormatter(TableFormatter):
             space=self.col_space
         )
 
-    def to_html(self, classes=None, notebook=False):
+    def to_html(self, classes=None, notebook=False, style=None):
         """
         Render a DataFrame to a html table.
 
@@ -848,9 +848,10 @@ class HTMLFormatter(TableFormatter):
     indent_delta = 2
 
     def __init__(self, formatter, classes=None, max_rows=None, max_cols=None,
-                 notebook=False):
+                 notebook=False, style=style):
         self.fmt = formatter
         self.classes = classes
+        self.style = style
 
         self.frame = self.fmt.frame
         self.columns = self.fmt.tr_frame.columns
