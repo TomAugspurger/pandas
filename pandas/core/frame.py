@@ -1446,7 +1446,7 @@ class DataFrame(NDFrame):
                 header=True, index=True, na_rep='NaN', formatters=None,
                 float_format=None, sparsify=None, index_names=True,
                 justify=None, bold_rows=True, classes=None, escape=True,
-                max_rows=None, max_cols=None, show_dimensions=False, style=None,
+                max_rows=None, max_cols=None, show_dimensions=False,
                 notebook=False):
         """
         Render a DataFrame as an HTML table.
@@ -1487,61 +1487,15 @@ class DataFrame(NDFrame):
                                            max_cols=max_cols,
                                            show_dimensions=show_dimensions)
         # TODO: a generic formatter wld b in DataFrameFormatter
-        formatter.to_html(classes=classes, style=style, notebook=notebook)
+        formatter.to_html(classes=classes, notebook=notebook)
 
         if buf is None:
             return formatter.buf.getvalue()
 
     def style(self, rows=None, columns=None, table=None):
-        styles = self._build_styles(
-            rows=rows, columns=columns, table=table
-        )
-        return self.to_html(styles=styles)
-
-    def _format_sytle_args(self, rows=None, columns=None, frame=None):
-        # TODO: hanlde rows=func.
-        rows = {row: [x] if not com.is_list_like(x) else x
-                for row, x in rows.items()}
-        columns = {col: [x] if not com.is_list_like(x) else x
-                for col, x in columns.items()}
-        frame = [x] if not com.is_list_like(x) else x
-        return rows, columns, frame
-
-
-    def _build_styles(self, rows=None, columns=None, frame=None):
-        final = []  # (row, col, prop, value)
-
-        rows, columns, frame = self._format_sytle_args(rows, columns, frame)
-
-        if rows is not None:
-            for row in rows:
-                for func in rows[row]:
-                    props, values  = zip(*func(self.loc[row]))
-                    final.append(pd.DataFrame({'row': row, 'col': self.columns,
-                                               'prop': props, 'value': values}))
-        if columns is not None:
-            for col in columns:
-                for func in columns[col]:
-                    props, values  = zip(*func(self[col]))
-                    final.append(pd.DataFrame({'row': self.index, 'col': col,
-                                               'prop': props, 'value': values}))
-
-        if frame is not None:
-            for func in frame:
-                r = func(self)
-                for col in r:
-                    try:
-                        prop, values = zip(*r[col])
-                    except ValueError:
-                        prop, values = '', ''
-                        final.append(pd.DataFrame({'row': r.index, 'col': col,
-                                               'prop': props, 'value': values}))
-
-        r = pd.concat(final)[['row', 'col', 'prop', 'value']]
-        r = (r['prop'] + ':' + r['value']).groupby([r['row'], r['col']]).agg(
-            lambda x: '; '.join(x))
-
-        return r.unstack()
+        styler = fmt.StylerFormatter(self, rows=rows, columns=columns,
+                                     table=table)
+        return styler
 
     @Appender(fmt.common_docstring + fmt.return_docstring, indents=1)
     def to_latex(self, buf=None, columns=None, col_space=None, colSpace=None,
