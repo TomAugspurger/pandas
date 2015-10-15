@@ -4072,26 +4072,6 @@ class TestStringRepTimestamp(tm.TestCase):
         self.assertEqual(str(dt_datetime_us), str(Timestamp(dt_datetime_us)))
 
 
-class TestStyler(tm.TestCase):
-
-    def setUp(self):
-        np.random.seed(24)
-        self.s = pd.DataFrame({'A': np.random.permutation(range(6))})
-        self.df = pd.DataFrame({'A': np.linspace(1, 5, 5), 'B': np.random.randn(5)})
-
-    @staticmethod
-    def color_bg_range(s, cmap='PuBu'):
-        """Color background in a range."""
-        import matplotlib.pyplot as plt
-        from matplotlib.colors import rgb2hex
-        colors = [rgb2hex(x) for x in plt.cm.get_cmap(cmap)(s)]
-        return pd.Series([('backgroud-color', color) for color in colors])
-
-    def test_format_style_args(self):
-        expected = ({}, {'A': [self.color_bg_range]}, {})
-        result = self.df._format_style_args(columns={"A": self.color_bg_range})
-        self.assertEqual(result, expected)
-
 if __name__ == '__main__':
     nose.runmodule(argv=[__file__, '-vvs', '-x', '--pdb', '--pdb-failure'],
                    exit=False)
