@@ -1,7 +1,9 @@
+import copy
 from unittest import TestCase
 
 import numpy as np
-from pandas import Series, DataFrame
+import pandas as pd
+from pandas import DataFrame
 from pandas.core.style import Styler
 # import pandas.util.testing as tm
 # import pandas as pd
@@ -15,72 +17,55 @@ class TestStyler(TestCase):
         self.f = lambda x: x
         self.g = lambda x: x
         self.styler = Styler(self.df)
+        self.attrs = pd.DataFrame({'A': ['color: red', 'color: blue']})
 
-    @staticmethod
-    def color_bg_range(s, cmap='PuBu'):
-        """Color background in a range."""
-        import matplotlib.pyplot as plt
-        from matplotlib.colors import rgb2hex
-        colors = [rgb2hex(x) for x in plt.cm.get_cmap(cmap)(s)]
-        return Series([('backgroud-color', color) for color in colors])
+    # def test_builder(self):
+    #     styler = Styler(self.df, table=self.even_red)
+    #     result = styler._build_styles(styler.rows, styler.columns, styler.table)
+    #     expected = pd.DataFrame()
 
-    @staticmethod
-    def even_red(df):
-        return df.applymap(lambda x: ('background-color', 'red') if x % 2 == 0
-                           else '')
+    def test_update_ctx(self):
+        self.styler.update_ctx(self.attrs)
+        expected = {(0, 'A'): ['color: red'],
+                    (1, 'A'): ['color: blue']}
+        self.assertEqual(self.styler.ctx, expected)
 
-    def test_format_row_single(self):
-        expected = {0: [self.f], 1: [self.f]}, {}, []
-        result = self.styler.format_style_args(self.df, rows=self.f)
-        self.assertEqual(result, expected)
+    def test_update_ctx_flatten_multi(self):
+        attrs = DataFrame({"A": ['color: red; foo: bar',
+                                 'color: blue; foo: baz']})
+        self.styler.update_ctx(attrs)
+        expected = {(0, 'A'): ['color: red', ' foo: bar'],
+                    (1, 'A'): ['color: blue', ' foo: baz']}
+        self.assertEqual(self.styler.ctx, expected)
 
-        result = self.styler.format_style_args(self.df, rows=[self.f])
-        self.assertEqual(result, expected)
+    def test_update_ctx_flatten_multi_traliing_semi(self):
+        attrs = DataFrame({"A": ['color: red; foo: bar;',
+                                 'color: blue; foo: baz;']})
+        self.styler.update_ctx(attrs)
+        expected = {(0, 'A'): ['color: red', ' foo: bar'],
+                    (1, 'A'): ['color: blue', ' foo: baz']}
+        self.assertEqual(self.styler.ctx, expected)
 
-    def test_format_row_dict(self):
-        expected = {0: [self.f]}, {}, []
-        result = self.styler.format_style_args(self.df, rows={0: self.f})
-        self.assertEqual(result, expected)
+    def test_copy(self):
+        s2 = copy.copy(self.styler)
+        self.assertIsNot(self.styler, s2)
 
-    def test_format_col_single(self):
-        expected = {}, {'A': [self.f], 'B': [self.f]}, []
-        result = self.styler.format_style_args(self.df, columns=self.f)
-        self.assertEqual(result, expected)
+        self.styler.update_ctx(self.attrs)
+        s2 = copy.copy(self.styler)
+        self.assertEqual(self.styler.ctx, s2.ctx)
 
-        result = self.styler.format_style_args(self.df, columns=[self.f])
-        self.assertEqual(result, expected)
+    def test_render(self):
+        df = pd.DataFrame({"A": [0, 1]})
+        style = lambda x: pd.Series(["color: red", "color: blue"], name=x.name)
+        s = Styler(df, uuid='AB').apply(style)
+        s.render()
+        # it worked?
 
-    def test_format_col_dict(self):
-        expected = {}, {'A': [self.f]}, []
-        result = self.styler.format_style_args(self.df, columns={'A': self.f})
-        self.assertEqual(result, expected)
+    def test_render_double(self):
+        df = pd.DataFrame({"A": [0, 1]})
+        style = lambda x: pd.Series(["color: red; border: 1px",
+                                     "color: blue; border: 2px"], name=x.name)
+        s = Styler(df, uuid='AB').apply(style)
+        s.render()
+        # it worked?kkk
 
-    def test_format_row_col(self):
-        expected = {0: [self.f]}, {'A': [self.g]}, []
-        result = self.styler.format_style_args(self.df, rows={0: self.f},
-                                               columns={'A': self.g})
-        self.assertEqual(result, expected)
-
-    def test_format_table(self):
-        expected = {}, {}, [self.f]
-        result = self.styler.format_style_args(self.df, table=self.f)
-        self.assertEqual(result, expected)
-
-        result = self.styler.format_style_args(self.df, table=[self.f])
-        self.assertEqual(result, expected)
-
-    def test_all(self):
-        expected = ({0: [self.f]},
-                    {'A': [self.f, self.g], 'B': [self.f, self.g]},
-                    [self.f, self.g])
-
-        result = self.styler.format_style_args(
-            self.df, rows={0: self.f}, columns=[self.f, self.g],
-            table=[self.f, self.g]
-        )
-        self.assertEqual(result, expected)
-
-    def test_builder(self):
-        styler = Styler(self.df, table=self.even_red)
-        result = styler._build_styles(styler.rows, styler.columns, styler.table)
-        expected = pd.DataFrame()

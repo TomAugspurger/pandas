@@ -1,6 +1,14 @@
-import uuid
+"""
+Module for applying conditional formatting to
+DataFrames and Series.
+"""
+from uuid import uuid1
+from copy import deepcopy
+from collections import defaultdict
 
-import pandas.core.common as com
+import numpy as np
+import pandas  as pd
+# import pandas.core.common as com
 
 class Styler(object):
     """
@@ -11,30 +19,21 @@ class Styler(object):
     ==========
 
     data : Series or DataFrame
-    rows : funcion, list of functions, or dictionary
-        see Notes
-    columns : function, list of functions or dictonary
-        see Notes
-    table : function or list of functions
-        see Notes
 
     Attributes
     ==========
 
-    Notes
-    =====
+    ctx : defaultdict
+        maps (row, column) -> [styles] where each style is a
+        TODO: <(attribute, value)> paire | <string with 'attribute: value'>
 
-    The rows and columns arguments take...
     """
-    def __init__(self, data, rows=None, columns=None, table=None):
+    def __init__(self, data, uuid=None, other=''):
         self.data = data
-        self.u = str(uuid.uuid1()).replace("-", "_")
-        rows, columns, table = self.format_style_args(data, rows, columns,
-                                                      table)
-        self.rows = rows
-        self.columns = columns
-        self.table = table
-
+        self.uuid = uuid
+        # This will behave strangely for non-unique indicies
+        self.ctx = defaultdict(list)
+        self.other = other
         try:
             from jinja2 import Template
         except ImportError:
@@ -67,6 +66,9 @@ class Styler(object):
                     {% endfor %}
                     }
                 {% endfor %}
+                {% for s in other %}
+                    {{s}}
+                {% endfor %}
                 </style>
 
                 <table id="T_{{uuid}}">
@@ -95,88 +97,12 @@ class Styler(object):
                 </table>
                 """)
 
-    @staticmethod
-    def format_style_args(data, rows=None, columns=None, table=None):
-        """
-        rows/columns:
-            - function
-            - list
-            - dict
-        dict : {row/col}: [function]
-        """
-        def cond(v):
-            return (callable(v) or com.is_list_like(v)
-                    and not isinstance(v, dict))
-
-        if cond(rows):
-            rows = {r: rows for r in data.index}
-        if cond(columns):
-            columns = {c: columns for c in data.columns}
-        if callable(table) and not com.is_list_like(table):
-            table = [table]
-
-        rows = rows or {}
-        columns = columns or {}
-        table = table or []
-
-        rows = {row: [x] if not com.is_list_like(x) else x
-                for row, x in rows.items()}
-        columns = {col: [x] if not com.is_list_like(x) else x
-                for col, x in columns.items()}
-        table = [table] if not com.is_list_like(table) else table
-
-        return rows, columns, table
-
-    def _build_styles(self, rows=None, columns=None, table=None):
-        """
-        Build a DataFrame indexed like ``self.data`` containing the CSS
-        property: value pairs.
-
-        rows/cols : {idx: [functions]}
-        table : [functions]
-        """
-        from pandas.tools.merge import concat
-        data = self.data
-        final = []  # (row, col, prop, value)
-
-        # rows, columns, table = self._format_style_args(rows, columns, table)
-        # TODO: ensure index handling is correct
-        for row in rows:
-            for func in rows[row]:
-                props, values  = zip(*func(data.loc[row]))
-                final.append(data.__class__({'row': row, 'col': data.columns,
-                                             'prop': props, 'value': values}))
-        for col in columns:
-            for func in columns[col]:
-                props, values  = zip(*func(data[col]))
-                final.append(data.__class__({'row': data.index, 'col': col,
-                                             'prop': props, 'value': values}))
-
-        for func in table:
-            r = func(data)
-            for col in r:
-                try:
-                    prop, values = zip(*r[col])
-                except ValueError:
-                    props, values = '', ''
-                    final.append(data.__class__({'row': r.index, 'col': col,
-                                                 'prop': props, 'value': values}))
-
-        r = concat(final)[['row', 'col', 'prop', 'value']]
-        # I don't feel great about this.
-        # Could use a MultiIndex of [(row/col), (prop, value)]
-        # Or a dumber structure like a dict.
-        r = (r['prop'] + ':' + r['value']).groupby([r['row'], r['col']]).agg(
-             lambda x: '; '.join(x))
-
-        return r.unstack()
-
     def translate(self):
         """
         Convert the DataFrame in `self.data` and the attrs from `_build_styles`
         into a dictionary of {head, body, uuid, cellstyle}
         """
-        attrs = self._build_styles(self.rows, self.columns, self.table)
+        ctx = self.ctx
         ROW_HEADING_CLASS = "row_heading"
         COL_HEADING_CLASS = "col_heading"
         DATA_CLASS = "data"
@@ -224,7 +150,7 @@ class Styler(object):
                 try:
                     style.append(
                         {'props': [x.split(":")
-                                   for x in attrs.loc[idx, col].split('; ')],
+                                   for x in ctx[idx, col]],
                          'selector': "row%s_col%s" % (r, c)})
                 except KeyError:
                     pass
@@ -232,18 +158,91 @@ class Styler(object):
 
         # uuid required to isolate table styling from others
         # in same notebook in ipnb
-        u = str(uuid.uuid1()).replace("-","_")
-        return dict(head=head, cellstyle=style, body=body, uuid=u)
+        uuid = self.uuid or str(uuid1()).replace("-", "_")
+        return dict(head=head, cellstyle=style, body=body, uuid=uuid,
+                    other=self.other)
 
     def render(self):
         return(self.t.render(**self.translate()))
 
-    def apply(func, axis=1, subset=None):
+    def update_ctx(self, attrs):
+        """
+        update the state of the Styler. Collects a mapping
+        of {index_label: '<property>: <value>'}
+
+        attrs: Series or DataFrame
+            should contain strings of '<property>: <value>'
+        """
+        # TODO: This breaks terribly with duplicates...
+        # Split attrs like "attr: val; attr: val"
+
+        if attrs.ndim == 1:
+            for row, v in attrs.iteritems():
+                for pair in v.rstrip(";").split(";"):
+                    self.ctx[(row, attrs.name)].append(pair)
+        else:
+            # MultiIndex is (row, col)
+            for k, v in attrs.stack().iteritems():
+                for pair in v.rstrip(";").split(";"):
+                    self.ctx[k].append(pair)
+
+    def __copy__(self):
+        styler = Styler(self.data)
+        styler.ctx = deepcopy(self.ctx)
+        return styler
+
+    def apply(self, func, axis=0, subset=None, **kwargs):
         """
         func : function or list of function
         """
-        pass
+        subset = slice(None) if subset is None else subset
+        if axis == 0:
+            row_idx, col_idx = slice(None), subset
+        else:
+            row_idx, col_idx = subset, slice(None)
+        result = self.data.loc[row_idx, col_idx].apply(func, axis=axis, **kwargs)
+        self.update_ctx(result)
+        return self
 
-    def applymap(func):
-        pass
+    def applymap(self, func, **kwargs):
+        raise ValueError
+
+    # Builtin stylers
+    def highlight_null(self, null_color='red', notnull_color=None):
+        if notnull_color is None:
+            notnull_color = ''
+        c = (self.data.where(self.data.isnull(),
+                             'background-color: %s' % notnull_color)
+             .fillna('background-color: %s' % null_color))
+        self.update_ctx(c)
+        return self
+
+    def color_bg_range(self, cmap='PuBu'):
+        self.apply(self._color_bg_range, cmap=cmap)
+        return self
+
+    @staticmethod
+    def _color_bg_range(s, cmap='PuBu', low=.2, high=.8):
+        """Color background in a range according to the data."""
+        import matplotlib.pyplot as plt
+        from matplotlib.colors import rgb2hex
+        normed = (s - s.min()) / (s.max() - s.min())
+        colors = [rgb2hex(x) for x in plt.cm.get_cmap(cmap)(normed)]
+        return s.__class__(['background-color: %s' % color for color in colors], index=s.index)
+
+    def color_font_even(s, even_color='black', odd_color='red'):
+        """"""
+        colors = [even_color if x % 2 else odd_color for x in s]
+        return pd.Series(['font-color: %s' % color for color in colors], index=s.index)
+
+    def color_gradient(s, cmap='YlGn'):
+        "Color background by position"
+        import matplotlib.pyplot as plt
+        from matplotlib.colors import rgb2hex
+        colors = [rgb2hex(x) for x in plt.cm.get_cmap(cmap)(1 / np.arange(len(s)))]
+        return pd.Series(['background-color: %s' % color for color in colors], index=s.index)
+
+    def striped(s):
+        colors = ["B5DEFF" if i % 2 else "" for i in range(len(s))]
+        return pd.Series(['background-color: %s' % color for color in colors], index=s.index)
 
