@@ -165,6 +165,12 @@ class Styler(object):
     def render(self):
         return(self.t.render(**self.translate()))
 
+    def _repr_html_(self):
+        """
+        return our rendered self
+        """
+        return self.render()
+
     def update_ctx(self, attrs):
         """
         update the state of the Styler. Collects a mapping
@@ -246,3 +252,12 @@ class Styler(object):
         colors = ["B5DEFF" if i % 2 else "" for i in range(len(s))]
         return pd.Series(['background-color: %s' % color for color in colors], index=s.index)
 
+    def align(self, side='right'):
+        """ align to the side """
+        self.apply(self._align, side=side)
+        return self
+
+    @staticmethod
+    def _align(s, side='right'):
+        """align to the side """
+        return s.__class__(['text-align: %s' % side], index=s.index)

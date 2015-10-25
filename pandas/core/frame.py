@@ -575,6 +575,12 @@ class DataFrame(NDFrame):
         else:
             return None
 
+    @property
+    def style(self):
+        """ return our styler """
+        from pandas.core.style import Styler
+        return Styler(self)
+
     def iteritems(self):
         """
         Iterator over (column name, Series) pairs.
@@ -1491,11 +1497,6 @@ class DataFrame(NDFrame):
 
         if buf is None:
             return formatter.buf.getvalue()
-
-    def style(self, rows=None, columns=None, table=None):
-        styler = fmt.StylerFormatter(self, rows=rows, columns=columns,
-                                     table=table)
-        return styler
 
     @Appender(fmt.common_docstring + fmt.return_docstring, indents=1)
     def to_latex(self, buf=None, columns=None, col_space=None, colSpace=None,
